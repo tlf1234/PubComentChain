@@ -271,10 +271,20 @@ contract PubComentsChain {
     event activitySponSucess(string filmId, address sponsor, uint256 value);
 
     //发布影评
-    event releaseCommentSucess();
+    event releaseCommentSucess(
+        string filmId,
+        address releaseMember,
+        uint256 evaScore,
+        uint256 value
+    );
 
     //参与投票
-    event partInVoteSucess();
+    event partInVoteSucess(
+        string filmId,
+        address partInMember,
+        address targetReleaser,
+        uint256 value
+    );
 
     using SafeMath for uint256;
 
@@ -389,7 +399,7 @@ contract PubComentsChain {
         require(isContract(msg.sender) == false, "Not a normal user");
         require(
             TutorialToken(msg.sender).balanceOf(msg.sender) > createActivityFee, //暂定活动发起费用为10 token
-            "Create activity fee is enough"
+            "Create activity fee is not enough"
         ); //创建合约费用不够
 
         //检测活动结束时间是否合法。
@@ -417,7 +427,7 @@ contract PubComentsChain {
         require(isContract(msg.sender) == false, "Not a normal user");
         require(
             TutorialToken(sponsor).balanceOf(sponsor) > value, //暂定活动发起费用为10 token
-            "count balance is enough"
+            "count balance is not enough"
         );
 
         activityEvaActivity[filmId].sponsorMap[sponsor] = value;
@@ -435,14 +445,59 @@ contract PubComentsChain {
         require(isContract(msg.sender) == false, "Not a normal user");
         require(
             TutorialToken(msg.sender).balanceOf(msg.sender) > value, //暂定活动发起费用为10 token
-            "count balance is enough"
+            "count balance is not enough"
         );
 
         activityEvaActivity[filmId].sponsorMap[msg.sender] = value;
         activityEvaActivity[filmId].tokenPoll += value;
 
-        payable(msg.sender).transfer(value); //转账手续费
+        payable(msg.sender).transfer(value); //转账以太赞助费
 
         emit activitySponSucess(filmId, msg.sender, value);
+    }
+
+    //发布评论文章
+    function releaseComment(
+        string memory filmId,
+        uint256 evaScore,
+        uint256 value
+    ) external {
+        require(isContract(msg.sender) == false, "Not a normal user");
+        require(
+            TutorialToken(msg.sender).balanceOf(msg.sender) > value,
+            "count balance is not enough"
+        );
+        //同一个账户不能重复发布，这个检验应该可以放到客户端，后面进一步考虑一下。
+
+        //放入影评分
+        activityEvaActivity[filmId]
+            .ReleaseEvaDataMap[msg.sender]
+            .evaScore = uint8(evaScore);
+        activityEvaActivity[filmId].tokenPoll += value;
+        TutorialToken(msg.sender).transfer(address(this), releaseCommentFee); //转账手续费
+        emit releaseCommentSucess(filmId, msg.sender, evaScore, value);
+    }
+
+    function partInVote(string memory filmId, address targetReleaser) external {
+        require(isContract(msg.sender) == false, "Not a normal user");
+        require(
+            TutorialToken(msg.sender).balanceOf(msg.sender) > partInVoteFee,
+            "count balance is not enough"
+        );
+        //同一个账只有一票，这个检验应该可以放到客户端，后面进一步考虑一下。
+
+        activityEvaActivity[filmId].participateNum++; //这个可要可不要，暂时先保留
+        activityEvaActivity[filmId].tokenPoll += partInVoteFee;
+        activityEvaActivity[filmId].voteMemberAddress.push(targetReleaser);
+        activityEvaActivity[filmId].ReleaseEvaDataMap[targetReleaser].voteNum++;
+
+        TutorialToken(msg.sender).transfer(address(this), partInVoteFee); //转账手续费
+
+        emit partInVoteSucess(
+            filmId,
+            msg.sender,
+            targetReleaser,
+            partInVoteFee
+        );
     }
 }

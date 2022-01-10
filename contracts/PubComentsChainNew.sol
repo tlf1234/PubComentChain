@@ -397,7 +397,7 @@ contract PubComentsChain {
         //看是否需要注册
         activityEvaActivity[filmId].sponsor = msg.sender;
         activityEvaActivity[filmId].tokenPoll += createActivityFee;
-        activityEvaActivity[filmId].endTime = activityEndTime;
+        activityEvaActivity[filmId].endTime = uint48(activityEndTime);
 
         TutorialToken(msg.sender).transfer(address(this), createActivityFee); //转账手续费
         emit createActivitySucess(

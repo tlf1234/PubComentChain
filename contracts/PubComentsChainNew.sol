@@ -247,6 +247,7 @@ library Data {
         uint256 activityEvaScore; //该活动最终评分
         //影评发布列表数据
         mapping(address => ReleaseEvaData) ReleaseEvaDataMap; //所有参与者评分映射。这里用mapping比较好，如果用数组，那么就会在有的函数调用中会出现查找消耗。
+        mapping(address=>uint256) public sponsorMap; //记录一下赞助成员
         address[] voteMemberAddress; //参与投票的用户。
         uint48 endTime; //活动结束时间
         // //参与者排名，之所以不放到上面的参与者数据中是因为排名只需要前30%即可，这样可以节省一些数据
@@ -268,17 +269,28 @@ contract PubComentsChain {
     );
 
     //提供赞助
-    event activitySpon();
+    event activitySponSucess(
+        string filmId,
+        address sponsor,
+        uint256 value,
+    );
 
     //发布影评
-    event releaseComment();
+    event releaseCommentSucess();
 
     //参与投票
-    event partInVote();
+    event partInVoteSucess();
 
     using SafeMath for uint256;
-    // 技术地址
+
+
+    // 合约创建者地址
     address public contract_creator; //实际上是项目方地址
+
+    uint256 createActivityFee=10;  //活动创建手续费 10 token
+    uint256 releaseCommentFee=2;  //影评发布手续费 2 token
+    uint256 partInVoteFee=1; //投票手续费 1 token
+
 
     //技术地址拿的总额度
     uint256 public totalTechAmount;
@@ -288,7 +300,7 @@ contract PubComentsChain {
     //注意如果需要对所有mapping进行遍历，可以通过设计一个包含key值数组的结构体的方法实现，这个网上已有相应代码。
 
     // 活动ID => 评定活动数据
-    mapping(string => Data.EvaActivity) public FilmEvaActivity; //Sting 对应的是电影Id,这个Id根据标准设计。
+    mapping(string => Data.EvaActivity) public activityEvaActivity; //Sting 对应的是电影Id,这个Id根据标准设计。
 
     //用户拥有的未提现token.之所以要这个是为了用户积累到一定数目的token后再进行体现，减少网络费用。
     mapping(address => uint256) public participantOwnerTokenMap;
@@ -380,34 +392,44 @@ contract PubComentsChain {
         string memory filmId,
         address _tokenAddr,
         uint256 activityEndTime,
-        uint256 value
     ) external {
         //注意在智能合约中如果函数添加payable，那么就会在生成封装类时会自动把value这个参数加入到入参中。
         require(isContract(msg.sender) == false, "Not a normal user");
         require(
-            TutorialToken(_tokenAddr).balanceOf(_tokenAddr) > 10,
+            TutorialToken(_tokenAddr).balanceOf(_tokenAddr) > createActivityFee, //暂定活动发起费用为10 token
             "Create activity fee is enough"
         ); //创建合约费用不够
 
         //检测活动结束时间是否合法。
 
-        TutorialToken(_tokenAddr).transfer(address(this), value);
+       
         //看是否需要注册
         // FilmEvaActivity[filmId].tokenPoll+=value;
-        //下面的有问题。
-        // SafeMath.add(FilmEvaActivity[filmId].tokenPoll,value);
-        FilmEvaActivity[filmId].tokenPoll = FilmEvaActivity[filmId]
-            .tokenPoll
-            .add(value);
-        // address  sponsorAddress=msg.sender;
-        // address payable sponsorAddress2=address( uint160(sponsorAddress));
-        // FilmEvaActivity[filmId].sponsor=address( uint160(sponsorAddress));
         FilmEvaActivity[filmId].sponsor = msg.sender;
+        activityEvaActivity[filmId].tokenPoll += createActivityFee;
+        activityEvaActivity[filmId].endTime=activityEndTime;
 
-        //token的bonus是否需要？？
-        //这里可能需要判别一下当前是否已经有owner及bonus了
-        // FilmEvaActivity[filmId].bonus=_eth;
-        // FilmEvaActivity[filmId].activityState = 1; //评定进行状态
-        //还需要记录一下结束时间。包括评定二次提交时间。
+
+        TutorialToken(_tokenAddr).transfer(address(this), createActivityFee); //转账手续费
+        emit createActivitySucess(filmId,_tokenAddr,activityEndTime,createActivityFee);
     }
+
+    //以token赞助活动
+    function supportActivityWithToken( string memory filmId,address sponsor,uint256 value) external{
+        require(isContract(msg.sender) == false, "Not a normal user");
+        require(
+            TutorialToken(_tokenAddr).balanceOf(_tokenAddr) > value, //暂定活动发起费用为10 token
+            "count balance is enough"
+        ); 
+
+        activityEvaActivity[filmId].sponsorMap[sponsor]=value;
+        activityEvaActivity[filmId].tokenPoll +=value;
+
+        TutorialToken(_tokenAddr).transfer(address(this), createActivityFee); //转账手续费
+        emit activitySponSucess(filmId,sponsor,value);
+
+    }
+    
+
+
 }

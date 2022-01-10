@@ -260,7 +260,7 @@ library Data {
 contract PubComentsChain {
     using SafeMath for uint256;
     // 技术地址
-    address public techAddr; //实际上是项目方地址
+    address public contract_creator; //实际上是项目方地址
 
     //技术地址拿的总额度
     uint256 public totalTechAmount;
@@ -277,13 +277,17 @@ contract PubComentsChain {
 
     uint256 filmBeEvaNum;
 
+    modifier creatorOnly() {
+        require(msg.sender == contract_creator, "Contract Creator Only");
+        _;
+    }
+
     /**
      * @dev 合约初始化
-     * @param _techAddr 项目方地址
      */
-    constructor(address _techAddr) {
+    constructor() {
         //高版本不需要public
-        techAddr = _techAddr;
+        contract_creator = msg.sender;
 
         //token应该是可以单独一份合约，这样token可以放到交易所中进行交易
         // 获取token合约的字节码

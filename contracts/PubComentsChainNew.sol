@@ -429,6 +429,10 @@ contract PubComentsChain {
             TutorialToken(sponsor).balanceOf(sponsor) > value, //暂定活动发起费用为10 token
             "count balance is not enough"
         );
+        require(
+            activityEvaActivity[filmId].endTime < block.timestamp,
+            "avtivity has end"
+        );
 
         activityEvaActivity[filmId].sponsorMap[sponsor] = value;
         activityEvaActivity[filmId].tokenPoll += value;
@@ -446,6 +450,10 @@ contract PubComentsChain {
         require(
             TutorialToken(msg.sender).balanceOf(msg.sender) > value, //暂定活动发起费用为10 token
             "count balance is not enough"
+        );
+        require(
+            activityEvaActivity[filmId].endTime < block.timestamp,
+            "avtivity has end"
         );
 
         activityEvaActivity[filmId].sponsorMap[msg.sender] = value;
@@ -467,6 +475,10 @@ contract PubComentsChain {
             TutorialToken(msg.sender).balanceOf(msg.sender) > value,
             "count balance is not enough"
         );
+        require(
+            activityEvaActivity[filmId].endTime < block.timestamp,
+            "avtivity has end"
+        );
         //同一个账户不能重复发布，这个检验应该可以放到客户端，后面进一步考虑一下。
 
         //放入影评分
@@ -483,6 +495,10 @@ contract PubComentsChain {
         require(
             TutorialToken(msg.sender).balanceOf(msg.sender) > partInVoteFee,
             "count balance is not enough"
+        );
+        require(
+            activityEvaActivity[filmId].endTime < block.timestamp,
+            "avtivity has end"
         );
         //同一个账只有一票，这个检验应该可以放到客户端，后面进一步考虑一下。
 

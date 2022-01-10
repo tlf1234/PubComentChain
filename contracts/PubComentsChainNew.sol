@@ -258,6 +258,24 @@ library Data {
 }
 
 contract PubComentsChain {
+    //活动创建成功事件
+    event createActivitySucess(
+        string filmId,
+        address activityCreater,
+        address tokenAddr,
+        uint256 activityEndTime,
+        uint256 value
+    );
+
+    //提供赞助
+    event activitySpon();
+
+    //发布影评
+    event releaseComment();
+
+    //参与投票
+    event partInVote();
+
     using SafeMath for uint256;
     // 技术地址
     address public contract_creator; //实际上是项目方地址
@@ -302,17 +320,13 @@ contract PubComentsChain {
         //   tokenAddr = _tokenAddr;
 
         //  }
-
-        // //获得众评合约中创建的Token合约
-        // function getTokenAddress() public view returns (address){
-        //   return tokenAddr;
     }
 
     /**
      * 合约接收eth的匿名函数
      */
     //这个函数也许用不到，因为基本前端都是从对应函数中触发转账的。
-    //payable 是否值适用于以太？？？？？
+    //payable 是否值适用于以太？？？？？ 是的
     receive() external payable {
         //向合约发送ETH，并且发送者这个地址不能是合约地址，也就是只能是账户地址，直接转账。
         uint256 _eth = msg.value;
@@ -360,17 +374,23 @@ contract PubComentsChain {
      * @dev 发起评定活动。
      * @param filmId 电影ID
      */
+
+    //注意这个创建活动的过程可能需要合约创建者账号判定，防止合约被其它合约调用出现攻击
     function createEvaActivityWithToken(
         string memory filmId,
         address _tokenAddr,
+        uint256 activityEndTime,
         uint256 value
     ) external {
         //注意在智能合约中如果函数添加payable，那么就会在生成封装类时会自动把value这个参数加入到入参中。
         require(isContract(msg.sender) == false, "Not a normal user");
-        require(value > 10, "Create contract fee is enough"); //创建合约费用不够
-        //还要加一个防止重复创建的操作。
-        // require(IERC20(_tokenAddr).balance[_tokenAddr]> 10, "Create contract fee is enough");  //先注释一下，测试函数功能
-        // ButtToken(_tokenAddr).transfer(address(this), value); //转账token的方法
+        require(
+            TutorialToken(_tokenAddr).balanceOf(_tokenAddr) > 10,
+            "Create activity fee is enough"
+        ); //创建合约费用不够
+
+        //检测活动结束时间是否合法。
+
         TutorialToken(_tokenAddr).transfer(address(this), value);
         //看是否需要注册
         // FilmEvaActivity[filmId].tokenPoll+=value;
@@ -387,499 +407,7 @@ contract PubComentsChain {
         //token的bonus是否需要？？
         //这里可能需要判别一下当前是否已经有owner及bonus了
         // FilmEvaActivity[filmId].bonus=_eth;
-        FilmEvaActivity[filmId].activityState = 1; //评定进行状态
+        // FilmEvaActivity[filmId].activityState = 1; //评定进行状态
         //还需要记录一下结束时间。包括评定二次提交时间。
-    }
-
-    function createEvaActivityBonusEth(string memory filmId) external payable {
-        //活动发起者可以参考这个函数
-        require(isContract(msg.sender) == false, "Not a normal user");
-        require(msg.value > 0, "Eth bonus is 0");
-        // uint _eth = msg.value;  //考虑只用token还是以太币。注意这里通过msg来获得值，实际也可以通过入参获得，但是msg是永不会出错的值，它是直接从合约消息中直接获得的。
-        payable(address(this)).transfer(msg.value); //真实转账操作
-
-        FilmEvaActivity[filmId].ethPoll = FilmEvaActivity[filmId].ethPoll.add(
-            msg.value
-        );
-
-        //这里可能需要判别一下当前是否已经有owner及bonus了
-        FilmEvaActivity[filmId].bonus = msg.value;
-
-        // //注册用户
-        // register(msg.sender, _superiorAddr);  //之所以需要这个是因为这个可以直接发起，当庄时必须要是注册用户。
-        // //计算用户获得份额 = eth / 一份的价格
-        // uint _share = _eth.mul(10 ** 4).div(sharePrice);
-        // //更新用户的总份额
-        // playerMap[msg.sender].share = playerMap[msg.sender].share.add(_share);
-        // //更新用户的坐庄金额
-        // playerMap[msg.sender].sitAmount = playerMap[msg.sender].sitAmount.add(_eth);
-        // //更新总份额
-        // totalShare = totalShare.add(_share);
-        // //更新庄家资金池
-        // scratchPool = scratchPool.add(_eth);
-        //锁仓
-        // ethLockup(msg.sender, _eth, _share, lockPeriod);
-    }
-
-    //这个状态是根据时间段来调用设置的，由外界根据相应条件触发。
-    function setActivityState(string memory filmId, uint8 activityState)
-        external
-    {
-        //注意切换到状态2时必须保证参与人数达到最小值1000以上，不然活动失败，返还所有参与人的费用。
-        FilmEvaActivity[filmId].activityState = activityState; //先进行简单的直接修改。
-    }
-
-    /**
-     * @dev 争夺发起者，创建合约及争夺时都可以调用这个函数
-     * @param filmId 电影Id
-     */
-    function sponsorFight(string memory filmId) external payable {
-        //注意bonus需要统一一下到底是用什么币或者多种币
-        //禁止合约调用
-        require(isContract(msg.sender) == false, "Not a normal user");
-        //活动时间。
-        // 如果拍卖已结束，撤销函数的调用。
-        require(
-            FilmEvaActivity[filmId].activityState != 4, //这个阶段其实可以持续到电影下映阶段
-            "Activity already ended."
-        );
-        // 调用撤回资金的核心方法
-        // uint _ethBonus=msg.value;
-        require(
-            msg.value > FilmEvaActivity[filmId].bonus,
-            "your bonus is less"
-        );
-        if (FilmEvaActivity[filmId].bonus != 0) {
-            // 返还出价时，简单地直接调用 highestBidder.send(highestBid) 函数，
-            // 是有安全风险的，因为它有可能执行一个非信任合约。
-            // 更为安全的做法是让接收方自己提取金钱。
-            // sponsorReturns[FilmEvaActivity[filmId].sponsor] += FilmEvaActivity[filmId].bonus; //活动的发起者退回到原先发起者的转户资金处
-            // FilmEvaActivity[filmId].sponsor.transfer(FilmEvaActivity[filmId].bonus);  //直接发送
-            FilmEvaActivity[filmId].bonus = msg.value;
-            FilmEvaActivity[filmId].ethPoll -= FilmEvaActivity[filmId].bonus; //奖金池先减去原来bonus
-        }
-        payable(msg.sender).transfer(msg.value); //真实转账操作
-        FilmEvaActivity[filmId].bonus = msg.value;
-        //奖金池改变
-        FilmEvaActivity[filmId].ethPoll += msg.value; //奖金池再加上新的bonus
-        FilmEvaActivity[filmId].sponsor = msg.sender;
-    }
-
-    //首次提交加密评定
-    function participateActivityWithBlind(
-        string memory filmId,
-        address _tokenAddr,
-        bytes32 _hashScore,
-        bytes32 _hashBoxOffice,
-        uint256 feeValue
-    ) external payable {
-        require(
-            FilmEvaActivity[filmId].activityState == 1,
-            "activity can not part in"
-        );
-        require(isContract(msg.sender) == false, "Not a normal user"); //这个条件可以用一个moditify
-        require(feeValue > 1, "your bonus is less"); //暂定参与票价为1token
-        //引用变量
-        Data.ParticipantActivityData storage participantData = FilmEvaActivity[
-            filmId
-        ].participantDataMap[msg.sender];
-        FilmEvaActivity[filmId].participantAddress.push(msg.sender); //记录所有地址数据
-        // ButtToken(_tokenAddr).transfer(address(this), feeValue); //token实际转账
-
-        ERC20(_tokenAddr).transfer(address(this), feeValue);
-
-        participantData.hashEvaScore = _hashScore;
-        participantData.hashForecastBoxOffice = _hashBoxOffice;
-        participantData.participantfee = feeValue; //这个费用是扣除转账费用后的参加评定的费用
-        //下面数据必须在提交加密数据时就赋值，这些值需要较早的显示。
-        FilmEvaActivity[filmId].participateNum++;
-        //资金池需要修改
-        FilmEvaActivity[filmId].tokenPoll += feeValue;
-    }
-
-    //第二次提交明文评定 。为了让用户体验更好，用户可以托管自己的评定到中心化后台，也可以自己在规定时间二次提交（加密数据一起都可以托管过来，）
-    function participateActivityWithReveal(
-        string memory filmId,
-        uint256 score,
-        uint256 forecastBoxOffice
-    ) external {
-        //检验活动是否在进行
-        require(
-            FilmEvaActivity[filmId].activityState == 2,
-            "activity is not in reveal state"
-        );
-        require(isContract(msg.sender) == false, "Not a normal user"); //这个条件可以用一个moditify
-        //注意这里还要实现加密加密校验!!!!!!!!!
-
-        //引用变量
-        Data.ParticipantActivityData storage participantData = FilmEvaActivity[
-            filmId
-        ].participantDataMap[msg.sender];
-        participantData.evaScore = score;
-        participantData.forecastBoxOffice = forecastBoxOffice;
-
-        //直接把总评分进行累加。 注意下面的溢出！！！！！！！！！
-        FilmEvaActivity[filmId].totalScore += score;
-        FilmEvaActivity[filmId].totalForecastBoxOffice += forecastBoxOffice;
-        FilmEvaActivity[filmId].participateAgainNum++;
-
-        //加一个事件监听结果
-    }
-
-    /**
-    评定阶段结束。
-   */
-    function EvaActivityEnd(string memory filmId) external {
-        //这里做一个时间判断，保证安全。
-        // require（block.timestamp>=FilmEvaActivity[filmId].endTime,"Evaluate activity has not reach the end time"）;
-        //活动必须处在revual阶段才可以进行结束
-        require(
-            FilmEvaActivity[filmId].activityState != 2,
-            "Evaluate state has already end."
-        );
-        FilmEvaActivity[filmId].activityState = 3;
-        //触发评分计算函数。
-        calculateFilmScore(filmId);
-        filmBeEvaNum++; //一次评定完成，统计已经评定电影次数。
-    }
-
-    uint256 calcuateFactor = 100; //浮点计算放大因子，也就是说只保留两位小数。最终在最终值中除以100即可。
-
-    //票房折合函数，实现票房折合为票房分,这个需要根据票房的实际数据确定函数，目前暂定一个线性函数
-    function boxoffice2Score(uint256 BoxOffice) internal returns (uint256) {
-        //注意传入的票房单位为：千万
-        uint256 boxOfficeScore = 0;
-        if (BoxOffice <= 100) {
-            boxOfficeScore = BoxOffice / 25 + 3;
-        } else if ((BoxOffice > 100) && (BoxOffice <= 600)) {
-            // boxOfficeScore=3*BoxOffice/500 + 32/5;   //浮点型没法算，后面解决
-        } else {
-            boxOfficeScore = 10;
-        }
-        return boxOfficeScore;
-    }
-
-    //商业电影及文艺电影的权重，这个权重要根据影视库库数据获得才更可靠
-    uint256 comFilmWeight;
-    uint256 litFilmEight;
-
-    //影评计算函数
-    function calculateFilmScore(string memory filmId) internal {
-        require(
-            FilmEvaActivity[filmId].totalScore != 0 &&
-                FilmEvaActivity[filmId].totalForecastBoxOffice != 0,
-            "totalScore err"
-        );
-
-        //计算平均分,需要实现浮点数据，数据类型后面具体解决
-        uint256 averageScore = FilmEvaActivity[filmId].totalScore /
-            FilmEvaActivity[filmId].participateAgainNum;
-        uint256 averageForecastBoxOffice = FilmEvaActivity[filmId]
-            .totalForecastBoxOffice /
-            FilmEvaActivity[filmId].participateAgainNum;
-
-        //计算最终影评分，当前采用线性函数进行关联两个因子
-        uint256 boxOfficeScore = boxoffice2Score(averageForecastBoxOffice);
-
-        //根据平均主观评分和折算的票房预测分折算为最终的影评评分。
-        //由于涉及到浮点数，且这部分为独立函数，后面找到最优浮点数计算方法后补充即可。
-        // if(){
-
-        // }
-
-        //  FilmEvaActivity[filmId].filmScore=
-    }
-
-    //这个函数的触发有两种方案：一个是中心化触发，一个是去中心化触发。
-    //电影下映或者达到最长时间时触发实际票房上传
-    function setFilmRealBoxOffice(string memory filmId, uint256 realBoxOffice)
-        private
-    {
-        require(
-            FilmEvaActivity[filmId].activityState == 3,
-            "this state can not set realboxoffice"
-        );
-        FilmEvaActivity[filmId].realFilmBoxOffice = realBoxOffice;
-
-        //调用参评者排名得分函数
-        calculateRankScore(filmId);
-
-        //调用计算排名函数
-
-        //获得挖矿奖励
-        getTokenReward(filmId);
-
-        //根据获奖名单排名分发所有奖励
-
-        //活动策底结束
-    }
-
-    //下述权重化为整型，解决浮点问题
-    uint256 subWeight = 4; //主观评分权重
-    uint256 objWeight = 2; //客观票房预测权重
-    uint256 subAndObjWeight = 4; //主客观权重
-    uint256 AvFactory = 500; //放大因子
-
-    //实现奖励算法
-    function calculateRankScore(string memory filmId) private {
-        uint256 scoreCoefficient;
-        uint256 boxOfficeCoefficient;
-        uint256 subAndObjCoefficient;
-        uint256 averageScore = FilmEvaActivity[filmId].totalScore /
-            FilmEvaActivity[filmId].participateAgainNum;
-        uint256 averageForecastBoxOffice = FilmEvaActivity[filmId]
-            .totalForecastBoxOffice /
-            FilmEvaActivity[filmId].participateAgainNum;
-        uint256 realFilmBoxOfficeScore = boxoffice2Score(
-            FilmEvaActivity[filmId].realFilmBoxOffice
-        ); //把实际票房转换为票房分
-
-        //这里分数暂时有最简单的线性除法计算各个因子的得分值。
-        for (
-            uint256 i = 0;
-            i < FilmEvaActivity[filmId].participantAddress.length;
-            i++
-        ) {
-            //变量引用
-            Data.ParticipantActivityData
-                storage participantData = FilmEvaActivity[filmId]
-                    .participantDataMap[
-                        FilmEvaActivity[filmId].participantAddress[i]
-                    ];
-            if (
-                (participantData.evaScore != 0) &&
-                (participantData.forecastBoxOffice != 0)
-            ) {
-                uint256 participantScore = participantData.evaScore;
-                uint256 participantBoxOffice = participantData
-                    .forecastBoxOffice;
-                uint256 forecastBoxOfficeScore = boxoffice2Score(
-                    participantBoxOffice
-                );
-                uint256 averageScoreBoxOffice = (participantScore +
-                    forecastBoxOfficeScore) / 2;
-
-                if (participantScore < averageScore) {
-                    scoreCoefficient =
-                        (subWeight *
-                            AvFactory *
-                            (averageScore - participantScore)) /
-                        averageScore;
-                } else {
-                    scoreCoefficient =
-                        (subWeight *
-                            AvFactory *
-                            (participantScore - averageScore)) /
-                        averageScore;
-                }
-                if (participantBoxOffice < averageForecastBoxOffice) {
-                    boxOfficeCoefficient =
-                        (objWeight *
-                            AvFactory *
-                            (averageForecastBoxOffice - participantBoxOffice)) /
-                        averageForecastBoxOffice;
-                } else {
-                    boxOfficeCoefficient =
-                        (objWeight *
-                            AvFactory *
-                            (participantBoxOffice - averageForecastBoxOffice)) /
-                        averageForecastBoxOffice;
-                }
-                //主客观误差，先按照最简单的方法实现
-                if (averageScoreBoxOffice < realFilmBoxOfficeScore) {
-                    subAndObjCoefficient =
-                        (realFilmBoxOfficeScore - averageScoreBoxOffice) /
-                        realFilmBoxOfficeScore;
-                } else {
-                    subAndObjCoefficient =
-                        (averageScoreBoxOffice - realFilmBoxOfficeScore) /
-                        realFilmBoxOfficeScore;
-                }
-                participantData.participantRankScore =
-                    scoreCoefficient +
-                    boxOfficeCoefficient +
-                    subAndObjCoefficient;
-            }
-        }
-    }
-
-    //排序这个如果采用传统排序方法这个比较消耗资源，需要慎重考虑一下方案
-    function calculateRank() internal {}
-
-    //根据下述算法实现排序。
-    // function top() public view returns (uint[] memory topIds)//pai xu
-    // {
-    //     topIds = new uint[](10);
-    //     for(uint appId=1;appId<apps.length;appId++){
-    //       //
-    //       uint topLast = appId<topIds.length?appId:topIds.length-1;
-    //       if(appId>=topIds.length &&   apps[appId].totalStar<=apps[topIds[topLast]].totalStar){//如果appid超过了topids数组的长度并且该appid对应的app总评分大于toplds数组最后一个元素所有的总评分就结束本次循环
-    //           continue;
-    //       }
-    //       //交换排序
-    //       topIds[topLast] = appId;
-    //       for(uint i=topLast;i>0;i--){
-    //           if(apps[topIds[i]].totalStar>apps[topIds[i-1]].totalStar){
-    //               uint tempAppId = topIds[i];
-    //               topIds[i] = topIds[i-1];
-    //               topIds[i-1] = tempAppId;
-    //           }
-    //           else{
-    //               continue;
-    //           }
-    //       }
-    //     }
-    // }
-
-    uint8 constant reduceNumConstant = 200; //每200部电影减半一次
-    uint256 constant startTokenNum = 45000000; //9千万进行挖矿，一千万进行预挖
-    uint256 constant participantsMin = 1000;
-    uint256 constant averageBoxOfficInBase = 50; //影视库中的均值票房5亿
-
-    //根据最终影评、实际票房及参与人数计算token挖矿收益并放入到奖金池中。
-    function getTokenReward(string memory filmId) private returns (uint256) {
-        uint8 filmScore = FilmEvaActivity[filmId].filmScore;
-        uint256 filmBoxOffice = FilmEvaActivity[filmId].realFilmBoxOffice;
-        uint256 participants = FilmEvaActivity[filmId].participateNum;
-        uint256 reduceNum = filmBeEvaNum / reduceNumConstant;
-        //根据减半情况，计算本次影评能够挖到矿的总额。
-        // uint countNum=reduceNum<<1; // 2^reduceNum
-        uint256 averageToken = SafeMath.div(startTokenNum, 2**reduceNum);
-
-        //影响因子的乘机
-        uint256 tokenCalcuateNum = SafeMath.div(participants, participantsMin) *
-            SafeMath.div(filmBoxOffice, averageBoxOfficInBase) *
-            SafeMath.div(filmScore, 5);
-        //按照对数对tokenCalcuateNum计算数值
-        uint256 logCalculateNum;
-        if (tokenCalcuateNum >= 2**128) {
-            tokenCalcuateNum >>= 128;
-            logCalculateNum += 128;
-        }
-        if (tokenCalcuateNum >= 2**64) {
-            tokenCalcuateNum >>= 64;
-            logCalculateNum += 64;
-        }
-        if (tokenCalcuateNum >= 2**32) {
-            tokenCalcuateNum >>= 32;
-            logCalculateNum += 32;
-        }
-        if (tokenCalcuateNum >= 2**16) {
-            tokenCalcuateNum >>= 16;
-            logCalculateNum += 16;
-        }
-        if (tokenCalcuateNum >= 2**8) {
-            tokenCalcuateNum >>= 8;
-            logCalculateNum += 8;
-        }
-        if (tokenCalcuateNum >= 2**4) {
-            tokenCalcuateNum >>= 4;
-            logCalculateNum += 4;
-        }
-        if (tokenCalcuateNum >= 2**2) {
-            tokenCalcuateNum >>= 2;
-            logCalculateNum += 2;
-        }
-        if (tokenCalcuateNum >= 2**1) {
-            /*x>>=1;*/
-            logCalculateNum += 1;
-        }
-
-        uint256 tokenReward = averageToken + averageToken * logCalculateNum;
-        FilmEvaActivity[filmId].tokenPoll += tokenReward;
-    }
-
-    /**
-    奖励分配
-   */
-    //调用Token合约进行挖矿奖励分配。
-    function distrabiteToken() internal {
-        //根据奖励分配挖矿奖励
-        //根据奖励分发tokenReward
-    }
-
-    //用户自己触发获得奖励。该函数触发涉及转账是需要消耗
-    function getReward(address _tokenAddr, address to) external {
-        require(
-            participantOwnerTokenMap[to] > 0,
-            "this account has not reward in this activity"
-        );
-        // ButtToken(_tokenAddr).distrabuteToken(to, participantOwnerTokenMap[to]);
-        ERC20(_tokenAddr).transfer(to, participantOwnerTokenMap[to]);
-    }
-
-    // 获取对应活动的数据，主要是全局数据，参与人、评定数据等，放到一起一次性获得。
-    function getParticipantNum(string memory filmId)
-        public
-        view
-        returns (uint256)
-    {
-        return FilmEvaActivity[filmId].participateNum;
-    }
-
-    function getTokenPoll(string memory filmId) public view returns (uint256) {
-        return FilmEvaActivity[filmId].tokenPoll;
-    }
-
-    function getEvaActivityData(string memory filmId)
-        external
-        view
-        returns (
-            address sponsor,
-            uint8 filmScore,
-            uint8 darkHorseNum,
-            uint256 participateNum,
-            uint256 participateAgainNum,
-            uint8 activityState,
-            uint256 bonus,
-            uint256 tokenPoll,
-            uint256 ethPoll,
-            uint256 totalScore,
-            uint256 totalForecastBoxOffice,
-            uint256 realFilmBoxOffice
-        )
-    {
-        Data.EvaActivity storage EvaActivityData = FilmEvaActivity[filmId];
-        return (
-            EvaActivityData.sponsor,
-            EvaActivityData.filmScore,
-            EvaActivityData.darkHorseNum,
-            EvaActivityData.participateNum,
-            EvaActivityData.participateAgainNum,
-            EvaActivityData.activityState,
-            EvaActivityData.bonus,
-            EvaActivityData.tokenPoll,
-            EvaActivityData.ethPoll,
-            EvaActivityData.totalScore,
-            EvaActivityData.totalForecastBoxOffice,
-            EvaActivityData.realFilmBoxOffice
-        );
-    }
-
-    function getParticipantActivityData(string memory filmId, address acount)
-        external
-        view
-        returns (
-            bytes32 hashEvaScore,
-            bytes32 hashForecastBoxOffice,
-            uint256 evaScore,
-            uint256 forecastBoxOffice,
-            uint256 participantfee,
-            uint256 participantRankScore,
-            uint256 tokenReward
-        )
-    {
-        Data.ParticipantActivityData
-            storage participantActivityData = FilmEvaActivity[filmId]
-                .participantDataMap[acount];
-        return (
-            participantActivityData.hashEvaScore,
-            participantActivityData.hashForecastBoxOffice,
-            participantActivityData.evaScore,
-            participantActivityData.forecastBoxOffice,
-            participantActivityData.participantfee,
-            participantActivityData.participantRankScore,
-            participantActivityData.tokenReward
-        );
     }
 }

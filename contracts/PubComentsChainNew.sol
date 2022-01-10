@@ -247,7 +247,7 @@ library Data {
         uint256 activityEvaScore; //该活动最终评分
         //影评发布列表数据
         mapping(address => ReleaseEvaData) ReleaseEvaDataMap; //所有参与者评分映射。这里用mapping比较好，如果用数组，那么就会在有的函数调用中会出现查找消耗。
-        mapping(address=>uint256) public sponsorMap; //记录一下赞助成员
+        mapping(address => uint256) sponsorMap; //记录一下赞助成员
         address[] voteMemberAddress; //参与投票的用户。
         uint48 endTime; //活动结束时间
         // //参与者排名，之所以不放到上面的参与者数据中是因为排名只需要前30%即可，这样可以节省一些数据
@@ -263,17 +263,12 @@ contract PubComentsChain {
     event createActivitySucess(
         string filmId,
         address activityCreater,
-        address tokenAddr,
         uint256 activityEndTime,
         uint256 value
     );
 
     //提供赞助
-    event activitySponSucess(
-        string filmId,
-        address sponsor,
-        uint256 value,
-    );
+    event activitySponSucess(string filmId, address sponsor, uint256 value);
 
     //发布影评
     event releaseCommentSucess();
@@ -283,14 +278,12 @@ contract PubComentsChain {
 
     using SafeMath for uint256;
 
-
     // 合约创建者地址
     address public contract_creator; //实际上是项目方地址
 
-    uint256 createActivityFee=10;  //活动创建手续费 10 token
-    uint256 releaseCommentFee=2;  //影评发布手续费 2 token
-    uint256 partInVoteFee=1; //投票手续费 1 token
-
+    uint256 createActivityFee = 10; //活动创建手续费 10 token
+    uint256 releaseCommentFee = 2; //影评发布手续费 2 token
+    uint256 partInVoteFee = 1; //投票手续费 1 token
 
     //技术地址拿的总额度
     uint256 public totalTechAmount;
@@ -390,49 +383,66 @@ contract PubComentsChain {
     //注意这个创建活动的过程可能需要合约创建者账号判定，防止合约被其它合约调用出现攻击
     function createEvaActivityWithToken(
         string memory filmId,
-        address _tokenAddr,
-        uint256 activityEndTime,
+        uint256 activityEndTime
     ) external {
         //注意在智能合约中如果函数添加payable，那么就会在生成封装类时会自动把value这个参数加入到入参中。
         require(isContract(msg.sender) == false, "Not a normal user");
         require(
-            TutorialToken(_tokenAddr).balanceOf(_tokenAddr) > createActivityFee, //暂定活动发起费用为10 token
+            TutorialToken(msg.sender).balanceOf(msg.sender) > createActivityFee, //暂定活动发起费用为10 token
             "Create activity fee is enough"
         ); //创建合约费用不够
 
         //检测活动结束时间是否合法。
 
-       
         //看是否需要注册
-        // FilmEvaActivity[filmId].tokenPoll+=value;
-        FilmEvaActivity[filmId].sponsor = msg.sender;
+        activityEvaActivity[filmId].sponsor = msg.sender;
         activityEvaActivity[filmId].tokenPoll += createActivityFee;
-        activityEvaActivity[filmId].endTime=activityEndTime;
+        activityEvaActivity[filmId].endTime = activityEndTime;
 
-
-        TutorialToken(_tokenAddr).transfer(address(this), createActivityFee); //转账手续费
-        emit createActivitySucess(filmId,_tokenAddr,activityEndTime,createActivityFee);
+        TutorialToken(msg.sender).transfer(address(this), createActivityFee); //转账手续费
+        emit createActivitySucess(
+            filmId,
+            msg.sender,
+            activityEndTime,
+            createActivityFee
+        );
     }
 
     //以token赞助活动
-    function supportActivityWithToken( string memory filmId,address sponsor,uint256 value) external{
+    function supportActivityWithToken(
+        string memory filmId,
+        address sponsor,
+        uint256 value
+    ) external {
         require(isContract(msg.sender) == false, "Not a normal user");
         require(
-            TutorialToken(_tokenAddr).balanceOf(_tokenAddr) > value, //暂定活动发起费用为10 token
+            TutorialToken(sponsor).balanceOf(sponsor) > value, //暂定活动发起费用为10 token
             "count balance is enough"
-        ); 
+        );
 
-        activityEvaActivity[filmId].sponsorMap[sponsor]=value;
-        activityEvaActivity[filmId].tokenPoll +=value;
+        activityEvaActivity[filmId].sponsorMap[sponsor] = value;
+        activityEvaActivity[filmId].tokenPoll += value;
 
-        TutorialToken(_tokenAddr).transfer(address(this), createActivityFee); //转账手续费
-        emit activitySponSucess(filmId,sponsor,value);
-
+        TutorialToken(sponsor).transfer(address(this), createActivityFee); //转账手续费
+        emit activitySponSucess(filmId, sponsor, value);
     }
-    
-    
 
-    
+    //以ETH赞助活动
+    function supportActivityWithToken(string memory filmId, uint256 value)
+        external
+        payable
+    {
+        require(isContract(msg.sender) == false, "Not a normal user");
+        require(
+            TutorialToken(msg.sender).balanceOf(msg.sender) > value, //暂定活动发起费用为10 token
+            "count balance is enough"
+        );
 
+        activityEvaActivity[filmId].sponsorMap[msg.sender] = value;
+        activityEvaActivity[filmId].tokenPoll += value;
 
+        payable(msg.sender).transfer(value); //转账手续费
+
+        emit activitySponSucess(filmId, msg.sender, value);
+    }
 }

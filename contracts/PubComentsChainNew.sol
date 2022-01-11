@@ -191,6 +191,10 @@ library SafeMath {
     }
 }
 
+/**
+    注意：该合约为电影评定合约，后面可以另定一个处理非电影评定以外的评定合约，基本和该合约差不多，只是舍去挖矿奖励相关部分。
+ */
+
 library Data {
     using SafeMath for uint256;
 
@@ -234,7 +238,7 @@ library Data {
         //电影Id,根据规则定义。这个可以不需要，因为活动的映射下标就是根据filmId定义key值的
         // string filmId;
 
-        //最终电影评分
+        //最终电影评分,可能要考虑用浮点类型
         uint8 filmScore;
         //参与评定人数，这个只做显示，不做运算
         uint256 participateNum;
@@ -244,7 +248,7 @@ library Data {
         //以太奖金池,赞助只接收以太币
         uint256 ethPoll;
         //可能要考虑用浮点类型
-        uint256 activityEvaScore; //该活动最终评分
+        // uint256 activityEvaScore; //该活动最终评分
         //影评发布列表数据
         mapping(address => ReleaseEvaData) ReleaseEvaDataMap; //所有参与者评分映射。这里用mapping比较好，如果用数组，那么就会在有的函数调用中会出现查找消耗。
         mapping(address => uint256) sponsorMap; //记录一下赞助成员
@@ -288,8 +292,9 @@ contract PubComentsChain {
 
     using SafeMath for uint256;
 
+    address mTokenAddress; //改地址为项目方发布的token地址，目前设定该合约中涉及的收费运作token只有本项目方token。
     // 合约创建者地址
-    address public contract_creator; //实际上是项目方地址
+    address public contract_creator; //项目方合约地址
 
     uint256 createActivityFee = 10; //活动创建手续费 10 token
     uint256 releaseCommentFee = 2; //影评发布手续费 2 token
@@ -303,7 +308,7 @@ contract PubComentsChain {
     //注意如果需要对所有mapping进行遍历，可以通过设计一个包含key值数组的结构体的方法实现，这个网上已有相应代码。
 
     // 活动ID => 评定活动数据
-    mapping(string => Data.EvaActivity) public activityEvaActivity; //Sting 对应的是电影Id,这个Id根据标准设计。
+    mapping(string => Data.EvaActivity) public evaActivityMap; //Sting 对应的是电影Id,这个Id根据标准设计。
 
     //用户拥有的未提现token.之所以要这个是为了用户积累到一定数目的token后再进行体现，减少网络费用。
     mapping(address => uint256) public participantOwnerTokenMap;
@@ -318,10 +323,10 @@ contract PubComentsChain {
     /**
      * @dev 合约初始化
      */
-    constructor() {
+    constructor(address tokenAddress) {
         //高版本不需要public
         contract_creator = msg.sender;
-
+        mTokenAddress = tokenAddress;
         //token应该是可以单独一份合约，这样token可以放到交易所中进行交易
         // 获取token合约的字节码
         //这里不要用这中方法来进行token的方法调用，只需通过在需要用到token方法的地方传入token地址即可。
@@ -405,11 +410,11 @@ contract PubComentsChain {
         //检测活动结束时间是否合法。
 
         //看是否需要注册
-        activityEvaActivity[filmId].sponsor = msg.sender;
-        activityEvaActivity[filmId].tokenPoll += createActivityFee;
-        activityEvaActivity[filmId].endTime = uint48(activityEndTime);
-
-        TutorialToken(msg.sender).transfer(address(this), createActivityFee); //转账手续费
+        evaActivityMap[filmId].sponsor = msg.sender;
+        evaActivityMap[filmId].tokenPoll += createActivityFee;
+        evaActivityMap[filmId].endTime = uint48(activityEndTime);
+        transfer_token(msg.sender, address(this), createActivityFee); //转账手续费
+        // TutorialToken(msg.sender).transfer(address(this), createActivityFee); //转账手续费
         emit createActivitySucess(
             filmId,
             msg.sender,
@@ -430,14 +435,14 @@ contract PubComentsChain {
             "count balance is not enough"
         );
         require(
-            activityEvaActivity[filmId].endTime < block.timestamp,
+            evaActivityMap[filmId].endTime < block.timestamp,
             "avtivity has end"
         );
 
-        activityEvaActivity[filmId].sponsorMap[sponsor] = value;
-        activityEvaActivity[filmId].tokenPoll += value;
-
-        TutorialToken(sponsor).transfer(address(this), createActivityFee); //转账手续费
+        evaActivityMap[filmId].sponsorMap[sponsor] = value;
+        evaActivityMap[filmId].tokenPoll += value;
+        transfer_token(msg.sender, address(this), value); //转账手续费
+        // TutorialToken(sponsor).transfer(address(this), value); //转账手续费
         emit activitySponSucess(filmId, sponsor, value);
     }
 
@@ -452,12 +457,12 @@ contract PubComentsChain {
             "count balance is not enough"
         );
         require(
-            activityEvaActivity[filmId].endTime < block.timestamp,
+            evaActivityMap[filmId].endTime < block.timestamp,
             "avtivity has end"
         );
 
-        activityEvaActivity[filmId].sponsorMap[msg.sender] = value;
-        activityEvaActivity[filmId].tokenPoll += value;
+        evaActivityMap[filmId].sponsorMap[msg.sender] = value;
+        evaActivityMap[filmId].tokenPoll += value;
 
         payable(msg.sender).transfer(value); //转账以太赞助费
 
@@ -476,17 +481,18 @@ contract PubComentsChain {
             "count balance is not enough"
         );
         require(
-            activityEvaActivity[filmId].endTime < block.timestamp,
+            evaActivityMap[filmId].endTime < block.timestamp,
             "avtivity has end"
         );
         //同一个账户不能重复发布，这个检验应该可以放到客户端，后面进一步考虑一下。
 
         //放入影评分
-        activityEvaActivity[filmId]
-            .ReleaseEvaDataMap[msg.sender]
-            .evaScore = uint8(evaScore);
-        activityEvaActivity[filmId].tokenPoll += value;
-        TutorialToken(msg.sender).transfer(address(this), releaseCommentFee); //转账手续费
+        evaActivityMap[filmId].ReleaseEvaDataMap[msg.sender].evaScore = uint8(
+            evaScore
+        );
+        evaActivityMap[filmId].tokenPoll += value;
+        transfer_token(msg.sender, address(this), releaseCommentFee); //转账手续费
+        // TutorialToken(msg.sender).transfer(address(this), releaseCommentFee); //转账手续费
         emit releaseCommentSucess(filmId, msg.sender, evaScore, value);
     }
 
@@ -497,17 +503,17 @@ contract PubComentsChain {
             "count balance is not enough"
         );
         require(
-            activityEvaActivity[filmId].endTime < block.timestamp,
+            evaActivityMap[filmId].endTime < block.timestamp,
             "avtivity has end"
         );
         //同一个账只有一票，这个检验应该可以放到客户端，后面进一步考虑一下。
 
-        activityEvaActivity[filmId].participateNum++; //这个可要可不要，暂时先保留
-        activityEvaActivity[filmId].tokenPoll += partInVoteFee;
-        activityEvaActivity[filmId].voteMemberAddress.push(targetReleaser);
-        activityEvaActivity[filmId].ReleaseEvaDataMap[targetReleaser].voteNum++;
+        evaActivityMap[filmId].participateNum++; //这个可要可不要，暂时先保留
+        evaActivityMap[filmId].tokenPoll += partInVoteFee;
+        evaActivityMap[filmId].voteMemberAddress.push(targetReleaser);
+        evaActivityMap[filmId].ReleaseEvaDataMap[targetReleaser].voteNum++;
 
-        TutorialToken(msg.sender).transfer(address(this), partInVoteFee); //转账手续费
+        transfer_token(msg.sender, address(this), partInVoteFee); //转账手续费
 
         emit partInVoteSucess(
             filmId,
@@ -516,4 +522,55 @@ contract PubComentsChain {
             partInVoteFee
         );
     }
+
+    /**
+     * sender_address     sender address
+     * recipient_address  recipient address
+     * amount             transfer amount
+     * transfer_token() transfers a given amount of ERC20 from the sender address to the recipient address
+     **/
+
+    function transfer_token(
+        address sender_address,
+        address recipient_address,
+        uint256 amount
+    ) internal {
+        require(
+            TutorialToken(mTokenAddress).balanceOf(sender_address) >= amount,
+            "Balance not enough"
+        );
+        TutorialToken(mTokenAddress).transfer(recipient_address, amount);
+    }
+
+    //可以对经常投票的账户做一个记录进行优化奖励。
+
+    /*查询函数*/
+    //根据电影Id查询活动基本信息
+    function getActivivityBasicInfo(string memory filmId)
+        external
+        view
+        returns (
+            string memory filmid,
+            address sponsor,
+            uint8 filmScore,
+            uint256 participateNum,
+            uint256 tokenPoll,
+            uint256 ethPoll,
+            uint48 endTime
+        )
+    {
+        Data.EvaActivity storage evaActivityInfo = evaActivityMap[filmId];
+
+        return (
+            filmId,
+            evaActivityInfo.sponsor,
+            evaActivityInfo.filmScore,
+            evaActivityInfo.participateNum,
+            evaActivityInfo.tokenPoll,
+            evaActivityInfo.ethPoll,
+            evaActivityInfo.endTime
+        );
+    }
+
+    //查询对应活动的成员列表
 }

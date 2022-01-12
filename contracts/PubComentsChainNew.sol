@@ -299,6 +299,7 @@ contract PubComentsChain {
     uint256 createActivityFee = 10; //活动创建手续费 10 token
     uint256 releaseCommentFee = 2; //影评发布手续费 2 token
     uint256 partInVoteFee = 1; //投票手续费 1 token
+    uint256 opposeFee = partInVoteFee * 2; //投反对票的费用
 
     //技术地址拿的总额度
     uint256 public totalTechAmount;
@@ -476,10 +477,12 @@ contract PubComentsChain {
         uint256 value
     ) external {
         require(isContract(msg.sender) == false, "Not a normal user");
+
         require(
             TutorialToken(msg.sender).balanceOf(msg.sender) > value,
             "count balance is not enough"
         );
+
         require(
             evaActivityMap[filmId].endTime < block.timestamp,
             "avtivity has end"
@@ -510,7 +513,7 @@ contract PubComentsChain {
 
         evaActivityMap[filmId].participateNum++; //这个可要可不要，暂时先保留
         evaActivityMap[filmId].tokenPoll += partInVoteFee;
-        evaActivityMap[filmId].voteMemberAddress.push(targetReleaser);
+        evaActivityMap[filmId].voteMemberAddress.push(msg.sender);
         evaActivityMap[filmId].ReleaseEvaDataMap[targetReleaser].voteNum++;
 
         transfer_token(msg.sender, address(this), partInVoteFee); //转账手续费
@@ -521,6 +524,31 @@ contract PubComentsChain {
             targetReleaser,
             partInVoteFee
         );
+    }
+
+    /*
+        投反对票反对
+    */
+    function partInOppose(string memory filmId, address targetReleaser)
+        external
+    {
+        require(isContract(msg.sender) == false, "Not a normal user");
+        require(
+            TutorialToken(msg.sender).balanceOf(msg.sender) > opposeFee,
+            "count balance is not enough"
+        );
+        require(
+            evaActivityMap[filmId].endTime < block.timestamp,
+            "avtivity has end"
+        );
+        //同一个账只有一票，这个检验应该可以放到客户端，后面进一步考虑一下。
+
+        evaActivityMap[filmId].participateNum++; //这个可要可不要，暂时先保留
+        evaActivityMap[filmId].tokenPoll += opposeFee;
+        evaActivityMap[filmId].voteMemberAddress.push(msg.sender);
+        evaActivityMap[filmId].ReleaseEvaDataMap[targetReleaser].opposeNum++;
+
+        transfer_token(msg.sender, address(this), opposeFee); //转账手续费
     }
 
     /**

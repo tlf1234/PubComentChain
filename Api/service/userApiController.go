@@ -33,7 +33,7 @@ func (ctr userApiController) userInfo(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, response.Response{Code: 1, Msg: "param error."})
 	}
 	var user entity.User
-	ctr.MysqlDao.Model(&entity.User{}).Where("address=?", address).First(user)
+	ctr.MysqlDao.Model(&entity.User{}).Where("address=?", address).First(&user)
 	if user.ID > 0 {
 		render.JSON(w, r, response.Response{Data: user})
 		return

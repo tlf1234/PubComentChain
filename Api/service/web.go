@@ -27,11 +27,14 @@ func Start(config *Config) error {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	db, err := gorm.Open(mysql.Open(config.DSN), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(entity.GlobalConf.DSN), &gorm.Config{})
 	if err != nil {
 		logger.Error("failed to connect database, got error: %v", err)
 	} else {
-		db.AutoMigrate(&entity.User{})
+		db.AutoMigrate(&entity.User{},
+		&entity.Movie{},
+		&entity.TransactionRecord{},
+		)
 	}
 
 	r.Route("/api/user", func(r chi.Router) {

@@ -21,8 +21,8 @@ type movieApiController struct {
 // @Success 200 {object} response.Response
 // @Failure 404 {object} Error
 // @Failure 500 {object} Error
-// @Router /api/user/userInfo [get]
-func (ctr movieApiController) movieInfo(w http.ResponseWriter, r *http.Request) {
+// @Router /api/movie/movieInfo [get]
+func (ctr movieApiController) MovieInfo(w http.ResponseWriter, r *http.Request) {
 	var (
 		id string
 	)
@@ -63,10 +63,10 @@ func (ctr movieApiController) movieInfo(w http.ResponseWriter, r *http.Request) 
 // @Param query query string true "查询key"
 // @Param page query int true "页码"
 // @Param pageSize query int true "每页数据"
-// @Success 200 {object} response.ElectricPageResult
+// @Success 200 {object} response.MoviePageList
 // @Failure 404 {object} Error
 // @Failure 500 {object} Error
-// @Router /api/repair/repairQuery [get]
+// @Router /api/movie/pageListQuery [get]
 func (ctr movieApiController) MoviePageList(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	var (

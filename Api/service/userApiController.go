@@ -21,7 +21,7 @@ type userApiController struct {
 // @Failure 404 {object} Error
 // @Failure 500 {object} Error
 // @Router /api/user/userInfo [get]
-func (ctr userApiController) userInfo(w http.ResponseWriter, r *http.Request) {
+func (ctr userApiController) UserInfo(w http.ResponseWriter, r *http.Request) {
 	var (
 		address string
 	)

@@ -32,14 +32,26 @@ func Start(config *Config) error {
 		logger.Error("failed to connect database, got error: %v", err)
 	} else {
 		db.AutoMigrate(&entity.User{},
-		&entity.Movie{},
-		&entity.TransactionRecord{},
+			&entity.Movie{},
+			&entity.TransactionRecord{},
 		)
 	}
 
 	r.Route("/api/user", func(r chi.Router) {
 		userApiCtr := userApiController{MysqlDao: db}
-		r.Get("/userInfo", userApiCtr.userInfo)
+		r.Get("/userInfo", userApiCtr.UserInfo)
+	})
+
+	r.Route("/api/movie", func(r chi.Router) {
+		movieApiCtr := movieApiController{MysqlDao: db}
+		r.Get("/movieInfo", movieApiCtr.MovieInfo)
+		r.Get("/pageListQuery", movieApiCtr.MoviePageList)
+	})
+
+	r.Route("/api/comment", func(r chi.Router) {
+		commentApiCtr := commentApiController{MysqlDao: db}
+		r.Get("/pageListQuery", commentApiCtr.CommentPageList)
+		r.Post("/create", commentApiCtr.Create)
 	})
 
 	log.Printf("Admin listening on :%v...", config.Port)

@@ -29,6 +29,7 @@ func (_ User) TableName() string {
 type Movie struct {
 	gorm.Model
 	Name         string    `gorm:"column:name;not null;type:varchar(128);default:'';uniqueIndex:idx_name"`
+	Pic          string    `gorm:"column:pic;type:longtext;"`
 	Type         string    `gorm:"column:type;not null;type:varchar(128);default:''"`
 	DirectorCast string    `gorm:"column:director_cast;not null;type:varchar(128);default:'';comment:'导演演员'"`
 	Desc         string    `gorm:"column:type;not null;desc:varchar(128);default:'';comment:'概要'"`
@@ -53,4 +54,19 @@ type TransactionRecord struct {
 
 func (_ TransactionRecord) TableName() string {
 	return "transaction_record"
+}
+
+type Comment struct {
+	gorm.Model
+	UserId    int     `gorm:"column:user_id;not null;type:int(16);"`
+	Address   string  `gorm:"column:address;not null;type:varchar(128);default:'';"`
+	MovieId   int     `gorm:"column:movie_id;not null;type:int(16);"`
+	Comment   string  `gorm:"column:number;type:longtext;comment:'数量'"`
+	EvaScore  float64 `gorm:"column:to_addr;not null;type:decimal(64,18);default:0.00;comment:'评分'"`
+	VoteNum   int     `gorm:"column:to_addr;not null;type:int(16);default:0;comment:'投票数'"`
+	OpposeNum int     `gorm:"column:to_addr;not null;type:int(16);default:0;comment:'反对数'"`
+}
+
+func (_ Comment) TableName() string {
+	return "comment"
 }

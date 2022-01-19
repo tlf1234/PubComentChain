@@ -119,6 +119,8 @@ contract BtteToken is ERC20 {
         return activityTable[_activityId];
     }
 
+    ///！注意 : distribute()函数应该加modifier限制调用其的地址（如只有母合约才可调用），此处不便添加！
+
     ///@dev 输入指定评定活动参数后，根据奖励算法，完成奖励的发放
     ///@notice 电影评定活动结束后调用此函数发放奖励
     ///@param _participants：接收奖金的地址
